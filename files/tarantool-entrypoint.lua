@@ -4,7 +4,16 @@ local fio = require('fio')
 local errno = require('errno')
 local urilib = require('uri')
 local console = require('console')
-local term = require('term')
+
+local ffi = require 'ffi'
+if not pcall(function() return ffi.C.isatty end) then
+    ffi.cdef[[ int isatty(int fd); ]]
+end
+local function isatty(fd)
+    fd = fd or 0
+    return ffi.C.isatty(fd) ~= 0
+end
+
 local log = require('log')
 local yaml = require('yaml')
 
@@ -78,15 +87,6 @@ local function choose_option(main, substitute, cfg)
     return main
 end
 
-function set_replication_source(replication_source, user_name, user_password)
-    local replication_source_table = parse_replication_source(
-        replication_source, user_name, user_password
-    )
-    local choice = choose_option('replication', 'replication_source', box.cfg)
-    box.cfg{[choice] = replication_source_table}
-    log.info("Updated box.cfg.%s to %s", choice, replication_source)
-end
-
 local function create_user(user_name, user_password)
     if user_name ~= 'guest' and user_password == nil then
         user_password = ""
@@ -154,10 +154,6 @@ WARNING: A password for guest user has been specified.
     end
 end
 
-function set_credentials(user_name, user_password)
-    create_user(user_name, user_password)
-end
-
 local function wrapper_cfg(override)
     local work_dir = '/var/lib/tarantool'
     local snap_filename = "*.snap"
@@ -183,7 +179,6 @@ local function wrapper_cfg(override)
         file_cfg.TARANTOOL_PORT = os.getenv('TARANTOOL_PORT')
         file_cfg.TARANTOOL_FORCE_RECOVERY = os.getenv('TARANTOOL_FORCE_RECOVERY')
         file_cfg.TARANTOOL_WAL_MODE = os.getenv('TARANTOOL_WAL_MODE')
-        file_cfg.TARANTOOL_REPLICATION_SOURCE = os.getenv('TARANTOOL_REPLICATION_SOURCE')
         file_cfg.TARANTOOL_REPLICATION = os.getenv('TARANTOOL_REPLICATION')
         file_cfg.TARANTOOL_SNAPSHOT_PERIOD = os.getenv('TARANTOOL_SNAPSHOT_PERIOD')
         file_cfg.TARANTOOL_MEMTX_MEMORY = os.getenv('TARANTOOL_MEMTX_MEMORY')
@@ -205,15 +200,6 @@ local function wrapper_cfg(override)
 
 
     local cfg = override or {}
-    -- Placeholders for deprecated options
-    cfg.slab_alloc_arena = tonumber(file_cfg.TARANTOOL_SLAB_ALLOC_ARENA) or
-        override.slab_alloc_arena
-    cfg.slab_alloc_maximal = tonumber(file_cfg.TARANTOOL_SLAB_ALLOC_MAXIMAL) or
-        override.slab_alloc_maximal
-    cfg.slab_alloc_minimal = tonumber(file_cfg.TARANTOOL_SLAB_ALLOC_MINIMAL) or
-        override.slab_alloc_minimal
-    cfg.snapshot_period = tonumber(file_cfg.TARANTOOL_SNAPSHOT_PERIOD) or
-        override.snapshot_period
     -- Replacements for deprecated options
     cfg.memtx_memory = tonumber(file_cfg.TARANTOOL_MEMTX_MEMORY) or
         override.memtx_memory
@@ -266,25 +252,16 @@ local function wrapper_cfg(override)
     end)
 
     console.listen(CONSOLE_SOCKET_PATH)
-
-    local metrics_port = tonumber(os.getenv('TARANTOOL_PROMETHEUS_DEFAULT_METRICS_PORT')) or 0
-    if metrics_port > 0 then
-        require('metrics.default_metrics.tarantool').enable()
-        local prometheus = require('metrics.plugins.prometheus')
-        local httpd = require('http.server').new('0.0.0.0', metrics_port)
-        httpd:route( { path = '/metrics' }, prometheus.collect_http)
-        httpd:start()
-    end
 end
 
 box.cfg = wrapper_cfg
 
 -- re-run the script passed as parameter with all arguments that follow
-execute_script = arg[1]
+local execute_script = arg[1]
 if execute_script == nil then
     box.cfg {}
 
-    if term.isatty(io.stdout) then
+    if isatty() then
         console.start()
         os.exit(0)
     end

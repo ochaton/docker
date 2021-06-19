@@ -5,5 +5,6 @@ rocks_trees = {
 
 rocks_servers = {
     [[http://rocks.tarantool.org/]],
-    [[http://luarocks.org/repositories/rocks]]
+    [[http://moonlibs.github.io/rocks]],
+    [[http://luarocks.org/repositories/rocks]],
 }
