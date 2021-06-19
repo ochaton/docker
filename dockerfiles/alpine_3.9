@@ -16,6 +16,10 @@ ENV TARANTOOL_VERSION=${TNT_VER} \
     LUAROCK_VSHARD_VERSION=0.1.17 \
     LUAROCK_HTTP_VERSION=1.1.0 \
     LUAROCK_METRICS_VERSION=0.9.0 \
+    LUAROCKS_INDEXPIRATION_VERSION=scm-1 \
+    LUAROCKS_EXPIRATIOND_VERSION=scm-1 \
+    LUAROCKS_QUEUE_VERSION=1.1.0 \
+    LUAROCKS_SPACER_VERSION=scm-3 \
     LUAROCKS_XQUEUE_VERSION=scm-5
 
 ARG ENABLE_BUNDLED_LIBYAML
@@ -87,6 +91,7 @@ RUN set -x \
         make install) \
     && rm -r /usr/src/luarocks \
     && rm -rf /usr/src/tarantool \
+    && rm -rvf /luarocks.tar.gz \
     && : "---------- remove build deps ----------" \
     && apk del .build-deps.1
 
@@ -105,11 +110,7 @@ RUN set -x \
         coreutils \
         gcc \
         g++ \
-        postgresql-dev \
         lua-dev \
-        musl-dev \
-        cyrus-sasl-dev \
-        mosquitto-dev \
         libev-dev \
         wget \
         unzip \
@@ -125,8 +126,19 @@ RUN set -x \
     && ${ROCKS_INSTALLER} install http $LUAROCK_HTTP_VERSION \
     && : "metrics" \
     && ${ROCKS_INSTALLER} install metrics $LUAROCK_METRICS_VERSION \
+    && : "indexpiration" \
+    && ${ROCKS_INSTALLER} install indexpiration $LUAROCKS_INDEXPIRATION_VERSION \
+    && : "expirationd" \
+    && ${ROCKS_INSTALLER} install expirationd $LUAROCKS_EXPIRATIOND_VERSION \
+    && : "queue" \
+    && ${ROCKS_INSTALLER} install queue $LUAROCKS_QUEUE_VERSION \
+    && : "package-reload" \
+    && ${ROCKS_INSTALLER} install package-reload \
+    && : "spacer" \
+    && ${ROCKS_INSTALLER} install spacer $LUAROCKS_SPACER_VERSION \
     && : "---------- remove build deps ----------" \
-    && apk del .build-deps.2
+    && apk del .build-deps.2 \
+    && rm -rvf ~/.cache
 
 # gh-170: needed for luarocks
 RUN apk update \
